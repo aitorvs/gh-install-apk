@@ -1,0 +1,65 @@
+#!/bin/bash
+set -eo pipefail
+
+tmp_dir() {
+  echo /tmp/.gh-install
+}
+
+repo_apk_list() {
+  gh api "repos/$1/releases" -q ".[].assets[].name"
+}
+
+extract_version() {
+  cut -d - -f 2 <<< $1
+}
+
+install_apk() {
+  repo=$1
+
+  tmp=$(tmp_dir)
+  rm -rf $tmp
+  mkdir -p $tmp
+
+  PS3="Select download file: "
+  select filename in $(repo_apk_list $repo); do break; done
+
+  echo "Downloading $filename..."
+  version=$(extract_version $filename)
+  gh release download "$version" --repo "$1" --pattern "$filename" --dir "$tmp"
+
+  cd $tmp
+  PS3="Select apk: "
+  select apk in $(find * -type f -not -path "\*apk"); do break; done
+
+  # install
+  adb install "$apk"
+
+  echo "Success!"
+  echo "Installed $apk APK"
+}
+
+display_help() {
+  cat <<-EOF
+  usage:
+    gh install-apk <user/repo>
+
+  commands:
+    gh install-apk <user/repo>  shows the list of all APKs available in the user/repo repository
+
+  [options]
+    -h, --help                  Display the help information
+EOF
+  exit 0
+}
+
+case $1 in
+  -h | --help)
+    display_help
+    exit 0
+    ;;
+  *)
+    ;;
+esac
+
+install_apk $@
+
